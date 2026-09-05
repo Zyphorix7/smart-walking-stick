@@ -2,494 +2,309 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The smart walking stick — Telemetry Grid</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>The smart walking stick — Live Geolocation</title>
   
-  <!-- Inter & JetBrains Mono Fonts -->
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
 
-  <!-- Leaflet Map CSS -->
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <style>
     :root {
-      --bg-canvas: #06090e;
-      --bg-surface: #0e1420;
-      --bg-card: rgba(18, 26, 41, 0.75);
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-focus: rgba(99, 102, 241, 0.4);
-      --text-primary: #f1f5f9;
-      --text-secondary: #94a3b8;
-      --text-muted: #475569;
-      --accent-blue: #3b82f6;
-      --accent-indigo: #6366f1;
-      --status-safe: #10b981;
-      --status-warning: #f59e0b;
-      --status-critical: #ef4444;
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+      --bg-base: #080c14;
+      --bg-panel: rgba(13, 20, 34, 0.88);
+      --bg-card: rgba(22, 33, 54, 0.75);
+      --border-line: rgba(255, 255, 255, 0.1);
+      --text-white: #ffffff;
+      --text-sub: #94a3b8;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.4);
+      --ok: #10b981;
+      --warning: #f59e0b;
+      --alert: #ef4444;
+      --font-ui: 'Inter', -apple-system, sans-serif;
+      --font-code: 'JetBrains Mono', monospace;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: var(--bg-canvas);
-      color: var(--text-primary);
-      font-family: var(--font-sans);
+      background-color: var(--bg-base);
+      color: var(--text-white);
+      font-family: var(--font-ui);
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100vh;
       overflow: hidden;
-      -webkit-font-smoothing: antialiased;
     }
 
-    /* Ambient Background Glow */
-    .ambient-glow {
-      position: absolute;
-      top: -120px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 700px;
-      height: 240px;
-      background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
-      pointer-events: none;
-      z-index: 1;
+    /* Emergency Alert Header Banner */
+    #alertBanner {
+      display: none;
+      background: linear-gradient(90deg, #b91c1c, #ef4444);
+      color: #ffffff;
+      text-align: center;
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      z-index: 1000;
+      animation: alertFlash 1s infinite alternate;
+    }
+    @keyframes alertFlash {
+      from { opacity: 1; }
+      to { opacity: 0.75; }
     }
 
-    /* Header Navigation */
+    /* Top Command Bar */
     header {
-      position: relative;
-      z-index: 100;
-      background: rgba(14, 20, 32, 0.85);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 14px 24px;
+      z-index: 500;
+      background: var(--bg-panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-line);
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 12px;
     }
 
-    .brand-group {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .brand-icon-box {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #1e293b, #0f172a);
-      border: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-
-    .status-dot {
-      width: 9px;
-      height: 9px;
-      background: var(--status-safe);
+    .brand-wrap { display: flex; align-items: center; gap: 12px; }
+    .brand-pulse {
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      box-shadow: 0 0 10px var(--status-safe);
+      background: var(--ok);
+      box-shadow: 0 0 10px var(--ok);
       transition: all 0.3s ease;
     }
-
-    .status-dot.danger {
-      background: var(--status-critical);
-      box-shadow: 0 0 14px var(--status-critical);
-      animation: rapidPulse 0.8s infinite alternate;
+    .brand-pulse.active-alert {
+      background: var(--alert);
+      box-shadow: 0 0 14px var(--alert);
+      animation: alertFlash 0.5s infinite alternate;
     }
 
-    @keyframes rapidPulse {
-      from { transform: scale(1); opacity: 1; }
-      to { transform: scale(1.3); opacity: 0.6; }
-    }
-
-    .brand-title-wrap h1 {
+    .brand-text h1 {
       font-size: 1.15rem;
       font-weight: 700;
       letter-spacing: -0.02em;
-      color: #ffffff;
-      line-height: 1.2;
     }
-
-    .brand-title-wrap span {
-      font-size: 0.72rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      letter-spacing: 0.05em;
+    .brand-text span {
+      font-size: 0.7rem;
+      color: var(--text-sub);
       text-transform: uppercase;
+      letter-spacing: 0.06em;
     }
 
-    /* Device Connectivity Dock */
-    .dock-controls {
+    .dock-box {
       display: flex;
       align-items: center;
-      gap: 10px;
-      background: rgba(10, 15, 26, 0.7);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 4px 6px 4px 12px;
+      gap: 8px;
+      background: rgba(8, 12, 20, 0.7);
+      border: 1px solid var(--border-line);
+      border-radius: 8px;
+      padding: 4px 6px 4px 10px;
     }
-
-    .dock-controls label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--text-secondary);
-      font-family: var(--font-mono);
-      text-transform: uppercase;
+    .dock-box label {
+      font-size: 0.7rem;
+      font-family: var(--font-code);
+      color: var(--text-sub);
     }
-
-    .dock-controls input {
+    .dock-box input {
       background: transparent;
       border: none;
       color: #fff;
-      font-family: var(--font-mono);
+      font-family: var(--font-code);
       font-size: 0.85rem;
       font-weight: 600;
-      width: 100px;
+      width: 90px;
       outline: none;
       text-transform: uppercase;
     }
-
-    .dock-controls button {
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-indigo));
+    .dock-box button {
+      background: var(--accent);
       color: #fff;
       border: none;
-      font-family: var(--font-sans);
+      padding: 6px 14px;
       font-size: 0.8rem;
       font-weight: 600;
-      padding: 7px 16px;
-      border-radius: 7px;
+      border-radius: 6px;
       cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 2px 8px var(--accent-glow);
     }
 
-    .dock-controls button:hover {
-      opacity: 0.92;
-      transform: translateY(-1px);
-    }
-
-    /* Critical Emergency Banner */
-    #emergencyBanner {
-      display: none;
-      background: linear-gradient(90deg, #b91c1c, #dc2626);
-      color: #fff;
-      padding: 12px 24px;
-      font-weight: 700;
-      font-size: 0.88rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      text-align: center;
-      z-index: 1000;
-      box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4);
-      animation: pulseAlert 1.5s infinite;
-    }
-
-    @keyframes pulseAlert {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.82; }
-    }
-
-    /* Telemetry HUD Grid */
-    .telemetry-hud {
-      position: relative;
-      z-index: 90;
-      background: rgba(14, 20, 32, 0.6);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-subtle);
+    /* Telemetry HUD Cards */
+    .hud-grid {
+      z-index: 400;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-line);
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px;
-      padding: 14px 24px;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      padding: 10px 20px;
     }
 
     .hud-card {
       background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 12px 16px;
+      border: 1px solid var(--border-line);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .hud-meta {
       display: flex;
-      flex-direction: column;
       justify-content: space-between;
-      transition: border 0.2s ease, transform 0.2s ease;
-    }
-
-    .hud-card:hover {
-      border-color: var(--border-focus);
-      transform: translateY(-1px);
-    }
-
-    .hud-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-
-    .hud-title {
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-
-    .hud-tag {
       font-size: 0.65rem;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text-muted);
-      font-family: var(--font-mono);
+      color: var(--text-sub);
+      text-transform: uppercase;
+      margin-bottom: 4px;
     }
-
-    .hud-value-row {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-
-    .hud-value {
-      font-size: 1.25rem;
+    .hud-stat {
+      font-size: 1.15rem;
+      font-family: var(--font-code);
       font-weight: 700;
-      font-family: var(--font-mono);
-      color: #ffffff;
-      letter-spacing: -0.02em;
+      color: #fff;
     }
 
-    .hud-unit {
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: var(--text-muted);
-    }
-
-    /* Sub-status Indicator Bar */
-    .meter-rail {
+    .stat-bar {
       width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.06);
+      height: 3px;
+      background: rgba(255, 255, 255, 0.08);
       border-radius: 2px;
-      margin-top: 8px;
+      margin-top: 6px;
       overflow: hidden;
     }
-
-    .meter-fill {
+    .stat-fill {
       height: 100%;
-      background: var(--status-safe);
-      width: 85%;
-      border-radius: 2px;
-      transition: width 0.4s ease, background-color 0.4s ease;
+      background: var(--ok);
+      width: 80%;
+      transition: width 0.4s ease;
     }
 
-    /* Interactive Geospatial Viewport */
+    /* Satellite Viewport */
     #map-viewport {
       flex: 1;
       width: 100%;
       z-index: 10;
-      background: #090d16;
     }
 
-    /* Footer Telemetry Terminal */
-    footer {
-      position: relative;
-      z-index: 100;
-      background: rgba(14, 20, 32, 0.95);
-      border-top: 1px solid var(--border-subtle);
-      padding: 10px 24px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.75rem;
-      color: var(--text-secondary);
-      font-family: var(--font-mono);
-    }
-
-    .terminal-meta {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: rgba(16, 185, 129, 0.1);
-      color: var(--status-safe);
-      font-weight: 600;
-      font-size: 0.7rem;
-    }
-
-    /* Custom Pulsing Leaflet Marker */
-    .beacon-pin {
-      position: relative;
-      width: 18px;
-      height: 18px;
-      background: var(--accent-indigo);
+    /* High-Visibility Satellite Beacon */
+    .pin-pulse {
+      width: 20px;
+      height: 20px;
+      background: #3b82f6;
       border: 3px solid #ffffff;
       border-radius: 50%;
-      box-shadow: 0 0 16px var(--accent-indigo);
+      box-shadow: 0 0 14px #3b82f6;
+      position: relative;
     }
-
-    .beacon-pin::after {
+    .pin-pulse::after {
       content: '';
       position: absolute;
-      top: -10px;
-      left: -10px;
-      width: 32px;
-      height: 32px;
+      top: -8px;
+      left: -8px;
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
-      border: 2px solid var(--accent-indigo);
-      animation: beaconWave 2s infinite ease-out;
+      border: 2px solid #60a5fa;
+      animation: wave 1.8s infinite ease-out;
+    }
+    @keyframes wave {
+      0% { transform: scale(0.6); opacity: 1; }
+      100% { transform: scale(2); opacity: 0; }
     }
 
-    @keyframes beaconWave {
-      0% { transform: scale(0.5); opacity: 1; }
-      100% { transform: scale(2.2); opacity: 0; }
+    /* Bottom Status Bar */
+    footer {
+      z-index: 500;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-line);
+      padding: 8px 20px;
+      font-family: var(--font-code);
+      font-size: 0.72rem;
+      color: var(--text-sub);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .live-chip {
+      color: var(--ok);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 600;
     }
 
     @media (max-width: 768px) {
-      header {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 12px 16px;
-      }
-      .dock-controls {
-        width: 100%;
-        justify-content: space-between;
-      }
-      .telemetry-hud {
-        grid-template-columns: repeat(2, 1fr);
-        padding: 10px 14px;
-        gap: 8px;
-      }
+      header { flex-direction: column; align-items: stretch; padding: 10px 14px; }
+      .dock-box { justify-content: space-between; }
+      .hud-grid { grid-template-columns: repeat(2, 1fr); padding: 8px 12px; }
     }
   </style>
 </head>
 <body>
 
-  <div class="ambient-glow"></div>
+  <div id="alertBanner">EMERGENCY: FALL DETECTED OR SOS TRIGGERED</div>
 
-  <!-- Emergency Priority Dispatch -->
-  <div id="emergencyBanner">
-    CRITICAL DISPATCH: EMERGENCY EVENT REPORTED &bull; IMMEDIATE ACTION REQUIRED
-  </div>
-
-  <!-- Command Top Bar -->
   <header>
-    <div class="brand-group">
-      <div class="brand-icon-box">
-        <div class="status-dot" id="systemPulse"></div>
-      </div>
-      <div class="brand-title-wrap">
+    <div class="brand-wrap">
+      <div class="brand-pulse" id="statusDot"></div>
+      <div class="brand-text">
         <h1>The smart walking stick</h1>
-        <span>Autonomous Mobility &amp; IoT Telemetry Network</span>
+        <span>Live Satellite Grid</span>
       </div>
     </div>
 
-    <div class="dock-controls">
-      <label for="stickIdInput">Node ID</label>
-      <input type="text" id="stickIdInput" value="STICK_01" spellcheck="false" />
-      <button onclick="mountHardwareStream()">Connect</button>
+    <div class="dock-box">
+      <label for="stickId">DEVICE</label>
+      <input type="text" id="stickId" value="STICK_01" spellcheck="false" />
+      <button onclick="startSync()">Connect</button>
     </div>
   </header>
 
-  <!-- High-Precision Telemetry HUD -->
-  <section class="telemetry-hud">
+  <section class="hud-grid">
     <div class="hud-card">
-      <div class="hud-header">
-        <span class="hud-title">Kinematic Safety</span>
-        <span class="hud-tag">MPU-6050</span>
-      </div>
-      <div class="hud-value-row">
-        <span class="hud-value" id="statusVal" style="color: var(--status-safe);">Nominal</span>
-      </div>
-      <div class="meter-rail">
-        <div class="meter-fill" id="statusMeter" style="width: 100%;"></div>
-      </div>
+      <div class="hud-meta"><span>Status</span><span>Kinetic</span></div>
+      <div class="hud-stat" id="statSafety" style="color: var(--ok);">Normal</div>
+      <div class="stat-bar"><div class="stat-fill" id="barSafety" style="width: 100%;"></div></div>
     </div>
 
     <div class="hud-card">
-      <div class="hud-header">
-        <span class="hud-title">Power Reserve</span>
-        <span class="hud-tag">Li-ion 3.7V</span>
-      </div>
-      <div class="hud-value-row">
-        <span class="hud-value" id="batteryVal">--</span>
-        <span class="hud-unit">%</span>
-      </div>
-      <div class="meter-rail">
-        <div class="meter-fill" id="batteryMeter" style="width: 0%;"></div>
-      </div>
+      <div class="hud-meta"><span>Battery</span><span>3.7V</span></div>
+      <div class="hud-stat"><span id="statBattery">--</span><span style="font-size: 0.75rem; color: var(--text-sub);"> %</span></div>
+      <div class="stat-bar"><div class="stat-fill" id="barBattery" style="width: 0%;"></div></div>
     </div>
 
     <div class="hud-card">
-      <div class="hud-header">
-        <span class="hud-title">Forward Proximity</span>
-        <span class="hud-tag">Sonar 40kHz</span>
-      </div>
-      <div class="hud-value-row">
-        <span class="hud-value" id="obstacleVal">Clear</span>
-      </div>
-      <div class="meter-rail">
-        <div class="meter-fill" id="obstacleMeter" style="width: 100%;"></div>
-      </div>
+      <div class="hud-meta"><span>Obstacle</span><span>Sonar</span></div>
+      <div class="hud-stat" id="statObstacle">Clear</div>
+      <div class="stat-bar"><div class="stat-fill" id="barObstacle" style="width: 100%;"></div></div>
     </div>
 
     <div class="hud-card">
-      <div class="hud-header">
-        <span class="hud-title">Surface Condition</span>
-        <span class="hud-tag">Optical Probe</span>
-      </div>
-      <div class="hud-value-row">
-        <span class="hud-value" id="surfaceVal">Dry Track</span>
-      </div>
-      <div class="meter-rail">
-        <div class="meter-fill" id="surfaceMeter" style="width: 10%; background-color: var(--status-safe);"></div>
-      </div>
+      <div class="hud-meta"><span>Puddle</span><span>Sensor</span></div>
+      <div class="hud-stat" id="statPuddle">Dry</div>
+      <div class="stat-bar"><div class="stat-fill" id="barPuddle" style="width: 20%;"></div></div>
     </div>
 
     <div class="hud-card">
-      <div class="hud-header">
-        <span class="hud-title">Telemetry Cycle</span>
-        <span class="hud-tag">GPRS 2G</span>
-      </div>
-      <div class="hud-value-row">
-        <span class="hud-value" id="syncTime">--:--:--</span>
-      </div>
-      <div class="meter-rail">
-        <div class="meter-fill" style="width: 100%; background-color: var(--accent-indigo);"></div>
-      </div>
+      <div class="hud-meta"><span>Telemetry</span><span>SIM800L</span></div>
+      <div class="hud-stat" id="statSync" style="font-size: 0.95rem;">--:--:--</div>
+      <div class="stat-bar"><div class="stat-fill" style="width: 100%; background: var(--accent);"></div></div>
     </div>
   </section>
 
-  <!-- Geospatial Viewport -->
   <div id="map-viewport"></div>
 
-  <!-- Enterprise Status Footer -->
   <footer>
-    <div class="terminal-meta">
-      <span class="status-badge" id="networkBadge">&#x25CF; Cloud Stream Online</span>
-      <span>GEODESIC: <strong id="geoCoords">Acquiring orbital fix...</strong></span>
-    </div>
-    <div>System Core V2.4 &bull; End-to-End Encrypted Telemetry</div>
+    <span class="live-chip">&#x25CF; Satellite Stream Active</span>
+    <span>POSITION: <strong id="coordText" style="color: #fff;">Acquiring GPS fix...</strong></span>
+    <span>Google Hybrid Satellite &bull; High Precision</span>
   </footer>
 
   <!-- Scripts -->
@@ -498,9 +313,9 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
   <script>
-    // -------------------------------------------------------------
-    // 1. CLOUD ENDPOINT CONFIGURATION
-    // -------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // 1. FIREBASE CONFIGURATION
+    // ------------------------------------------------------------------
     const firebaseConfig = {
       databaseURL: "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com"
     };
@@ -511,170 +326,150 @@
         firebase.initializeApp(firebaseConfig);
         db = firebase.database();
       }
-    } catch (err) {
-      console.warn("Operating under simulation engine until Firebase endpoint is linked.");
+    } catch (e) {
+      console.warn("Using simulation mode until Firebase URL is provided.");
     }
 
-    // -------------------------------------------------------------
-    // 2. GEOSPATIAL MAP CORE (Dark Carto Vector Tiles)
-    // -------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // 2. REALISTIC GOOGLE HYBRID SATELLITE MAP
+    // ------------------------------------------------------------------
     let currentLat = 28.6139;
     let currentLng = 77.2090;
 
     const map = L.map('map-viewport', {
       zoomControl: false,
       attributionControl: false
-    }).setView([currentLat, currentLng], 16);
+    }).setView([currentLat, currentLng], 17);
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Modern High-Contrast Minimalist Dark Base Map
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd'
+    // Google Satellite + Street Labels layer
+    L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
     }).addTo(map);
 
-    // Custom Glowing Beacon Pin
     const beaconIcon = L.divIcon({
-      className: 'beacon-container',
-      html: '<div class="beacon-pin" id="beaconMarker"></div>',
-      iconSize: [18, 18],
-      iconAnchor: [9, 9]
+      className: '',
+      html: '<div class="pin-pulse"></div>',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
     });
 
-    const caneMarker = L.marker([currentLat, currentLng], { icon: beaconIcon }).addTo(map)
-      .bindPopup("<strong style='font-family: sans-serif; color: #111;'>The smart walking stick</strong><br>Status: Signal Valid")
+    const marker = L.marker([currentLat, currentLng], { icon: beaconIcon }).addTo(map)
+      .bindPopup("<b>The smart walking stick</b><br>Signal Locked")
       .openPopup();
 
-    let activeTelemetryRef = null;
+    let activeRef = null;
 
-    // -------------------------------------------------------------
-    // 3. TELEMETRY CONTROLLER
-    // -------------------------------------------------------------
-    function mountHardwareStream() {
-      const stickId = document.getElementById('stickIdInput').value.trim().toUpperCase();
-      if (!stickId) return;
+    // ------------------------------------------------------------------
+    // 3. TELEMETRY & DATA DISPATCH
+    // ------------------------------------------------------------------
+    function startSync() {
+      const id = document.getElementById('stickId').value.trim().toUpperCase();
+      if (!id) return;
 
-      if (activeTelemetryRef && db) {
-        activeTelemetryRef.off();
-      }
+      if (activeRef && db) activeRef.off();
 
       if (db && !firebaseConfig.databaseURL.includes("YOUR-PROJECT-ID")) {
-        activeTelemetryRef = db.ref('sticks/' + stickId);
-        activeTelemetryRef.on('value', (snapshot) => {
-          const packet = snapshot.val();
-          if (packet) renderTelemetryFrame(packet);
+        activeRef = db.ref('sticks/' + id);
+        activeRef.on('value', (snapshot) => {
+          const val = snapshot.val();
+          if (val) updateHUD(val);
         });
       } else {
-        triggerSimulationPayload();
+        runSimulator();
       }
     }
 
-    function renderTelemetryFrame(data) {
-      // 1. Geodesic Trajectory Update
+    function updateHUD(data) {
+      // Update GPS coordinates
       if (data.lat && data.lng) {
         currentLat = data.lat;
         currentLng = data.lng;
-        caneMarker.setLatLng([currentLat, currentLng]);
-        map.panTo([currentLat, currentLng], { animate: true, duration: 1.2 });
-        document.getElementById('geoCoords').textContent = `${data.lat.toFixed(6)}° N, ${data.lng.toFixed(6)}° E`;
+        marker.setLatLng([currentLat, currentLng]);
+        map.panTo([currentLat, currentLng], { animate: true, duration: 1.0 });
+        document.getElementById('coordText').textContent = `${data.lat.toFixed(6)}° N, ${data.lng.toFixed(6)}° E`;
       }
 
-      // 2. Battery Reserve Gauge
-      const batVal = data.battery !== undefined ? data.battery : 0;
-      document.getElementById('batteryVal').textContent = batVal;
-      const batMeter = document.getElementById('batteryMeter');
-      batMeter.style.width = `${batVal}%`;
-      batMeter.style.backgroundColor = batVal > 40 ? 'var(--status-safe)' : (batVal > 15 ? 'var(--status-warning)' : 'var(--status-critical)');
+      // Battery
+      const battery = data.battery !== undefined ? data.battery : 0;
+      document.getElementById('statBattery').textContent = battery;
+      const barBattery = document.getElementById('barBattery');
+      barBattery.style.width = `${battery}%`;
+      barBattery.style.background = battery > 40 ? 'var(--ok)' : (battery > 15 ? 'var(--warning)' : 'var(--alert)');
 
-      // 3. Sonar Proximity
-      const obsElem = document.getElementById('obstacleVal');
-      const obsMeter = document.getElementById('obstacleMeter');
+      // Obstacle Range
+      const statObstacle = document.getElementById('statObstacle');
+      const barObstacle = document.getElementById('barObstacle');
       if (data.obstacle && data.obstacle < 150) {
-        obsElem.textContent = `${data.obstacle} cm`;
-        obsElem.style.color = data.obstacle < 50 ? 'var(--status-critical)' : 'var(--status-warning)';
-        obsMeter.style.width = `${Math.min(100, (data.obstacle / 200) * 100)}%`;
-        obsMeter.style.backgroundColor = obsElem.style.color;
+        statObstacle.textContent = `${data.obstacle} cm`;
+        statObstacle.style.color = data.obstacle < 50 ? 'var(--alert)' : 'var(--warning)';
+        barObstacle.style.width = `${Math.min(100, (data.obstacle / 200) * 100)}%`;
+        barObstacle.style.background = statObstacle.style.color;
       } else {
-        obsElem.textContent = "Path Clear";
-        obsElem.style.color = "var(--text-primary)";
-        obsMeter.style.width = "100%";
-        obsMeter.style.backgroundColor = "var(--status-safe)";
+        statObstacle.textContent = 'Clear';
+        statObstacle.style.color = '#fff';
+        barObstacle.style.width = '100%';
+        barObstacle.style.background = 'var(--ok)';
       }
 
-      // 4. Ground Optical Hydration Sensor
-      const surfaceElem = document.getElementById('surfaceVal');
-      const surfaceMeter = document.getElementById('surfaceMeter');
+      // Puddle / Surface
+      const statPuddle = document.getElementById('statPuddle');
+      const barPuddle = document.getElementById('barPuddle');
       if (data.puddle === true) {
-        surfaceElem.textContent = "Water Hazard";
-        surfaceElem.style.color = "#38bdf8";
-        surfaceMeter.style.width = "100%";
-        surfaceMeter.style.backgroundColor = "#38bdf8";
+        statPuddle.textContent = 'Water!';
+        statPuddle.style.color = '#38bdf8';
+        barPuddle.style.width = '100%';
+        barPuddle.style.background = '#38bdf8';
       } else {
-        surfaceElem.textContent = "Dry Track";
-        surfaceElem.style.color = "var(--text-primary)";
-        surfaceMeter.style.width = "15%";
-        surfaceMeter.style.backgroundColor = "var(--status-safe)";
+        statPuddle.textContent = 'Dry';
+        statPuddle.style.color = '#fff';
+        barPuddle.style.width = '20%';
+        barPuddle.style.background = 'var(--ok)';
       }
 
-      // 5. Kinematic Incident / Fall State
-      const emergencyBanner = document.getElementById('emergencyBanner');
-      const statusElem = document.getElementById('statusVal');
-      const statusMeter = document.getElementById('statusMeter');
-      const pulseDot = document.getElementById('systemPulse');
+      // Fall / SOS Alert State
+      const banner = document.getElementById('alertBanner');
+      const statSafety = document.getElementById('statSafety');
+      const barSafety = document.getElementById('barSafety');
+      const dot = document.getElementById('statusDot');
 
       if (data.emergency === true) {
-        emergencyBanner.style.display = 'block';
-        statusElem.textContent = 'INCIDENT DETECTED';
-        statusElem.style.color = 'var(--status-critical)';
-        statusMeter.style.width = '100%';
-        statusMeter.style.backgroundColor = 'var(--status-critical)';
-        pulseDot.classList.add('danger');
-
-        caneMarker.setPopupContent(
-          `<div style="font-family: sans-serif; color: #b91c1c; font-weight: 700;">` +
-          `[CRITICAL ALERT]<br>${data.reason || 'Fall or SOS Triggered'}` +
-          `</div>`
-        ).openPopup();
+        banner.style.display = 'block';
+        statSafety.textContent = 'INCIDENT';
+        statSafety.style.color = 'var(--alert)';
+        barSafety.style.width = '100%';
+        barSafety.style.background = 'var(--alert)';
+        dot.classList.add('active-alert');
+        marker.setPopupContent(`<b style="color: #ef4444;">EMERGENCY!</b><br>${data.reason || 'Assistance requested'}`).openPopup();
       } else {
-        emergencyBanner.style.display = 'none';
-        statusElem.textContent = 'Nominal';
-        statusElem.style.color = 'var(--status-safe)';
-        statusMeter.style.width = '100%';
-        statusMeter.style.backgroundColor = 'var(--status-safe)';
-        pulseDot.classList.remove('danger');
-
-        caneMarker.setPopupContent(
-          `<div style="font-family: sans-serif; color: #0f172a;">` +
-          `<strong>The smart walking stick</strong><br>` +
-          `Active Unit: ${document.getElementById('stickIdInput').value}<br>` +
-          `Telemetry Status: Optimal` +
-          `</div>`
-        );
+        banner.style.display = 'none';
+        statSafety.textContent = 'Normal';
+        statSafety.style.color = 'var(--ok)';
+        barSafety.style.width = '100%';
+        barSafety.style.background = 'var(--ok)';
+        dot.classList.remove('active-alert');
+        marker.setPopupContent(`<b>The smart walking stick</b><br>ID: ${document.getElementById('stickId').value}`);
       }
 
-      // Timestamp Sync
-      document.getElementById('syncTime').textContent = new Date().toLocaleTimeString();
+      document.getElementById('statSync').textContent = new Date().toLocaleTimeString();
     }
 
-    // -------------------------------------------------------------
-    // 4. DEMO EMULATOR (Activates until Firebase URL is pasted)
-    // -------------------------------------------------------------
-    function triggerSimulationPayload() {
-      const demoPacket = {
-        lat: currentLat + (Math.random() - 0.5) * 0.0008,
-        lng: currentLng + (Math.random() - 0.5) * 0.0008,
+    // Auto-demo if Firebase is not linked yet
+    function runSimulator() {
+      const sample = {
+        lat: currentLat + (Math.random() - 0.5) * 0.0005,
+        lng: currentLng + (Math.random() - 0.5) * 0.0005,
         battery: 92,
-        obstacle: 180,
+        obstacle: 140,
         puddle: false,
-        emergency: false,
-        reason: "Telemetry Normal"
+        emergency: false
       };
-      renderTelemetryFrame(demoPacket);
+      updateHUD(sample);
     }
 
-    // Auto-mount on load
-    mountHardwareStream();
+    startSync();
   </script>
 </body>
 </html>
