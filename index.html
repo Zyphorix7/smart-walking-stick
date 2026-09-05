@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Walking Stick — Live Tracking</title>
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --accent: #2563eb;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-dark); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      z-index: 1000;
+    }
+
+    .brand { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+    .brand-icon { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); }
+
+    .code-input-bar { display: flex; gap: 8px; align-items: center; }
+    .code-input-bar input {
+      background: #0b1120;
+      border: 1px solid var(--border);
+      color: white;
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+      text-transform: uppercase;
+    }
+    .code-input-bar input:focus { border-color: var(--accent); }
+    .code-input-bar button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Emergency Alert Banner */
+    #emergencyBanner {
+      display: none;
+      background: var(--danger);
+      color: white;
+      text-align: center;
+      padding: 10px 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      animation: pulseAlert 1s infinite alternate;
+      z-index: 1000;
+    }
+    @keyframes pulseAlert {
+      from { opacity: 1; }
+      to { opacity: 0.7; }
+    }
+
+    /* Telemetry Dashboard */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      padding: 12px 18px;
+      background: #151f32;
+      border-bottom: 1px solid var(--border);
+      z-index: 1000;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    .metric-card .title { font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; margin-bottom: 2px; }
+    .metric-card .value { font-size: 1.05rem; font-weight: 600; }
+
+    #map { flex: 1; width: 100%; z-index: 10; }
+  </style>
+</head>
+<body>
+
+  <div id="emergencyBanner">EMERGENCY ALERT: FALL DETECTED OR SOS TRIGGERED!</div>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon" id="pulseDot"></div>
+      Smart Cane Live Monitor
+    </div>
+
+    <div class="code-input-bar">
+      <input type="text" id="stickIdInput" placeholder="Enter Stick ID (e.g. STICK_01)" value="STICK_01" />
+      <button onclick="startTracking()">Track</button>
+    </div>
+  </header>
+
+  <div class="dashboard-grid">
+    <div class="metric-card">
+      <div class="title">Current Status</div>
+      <div class="value" id="statusVal" style="color: var(--success);">Normal</div>
+    </div>
+    <div class="metric-card">
+      <div class="title">Battery Level</div>
+      <div class="value" id="batteryVal">-- %</div>
+    </div>
+    <div class="metric-card">
+      <div class="title">Ground Surface</div>
+      <div class="value" id="surfaceVal">Dry</div>
+    </div>
+    <div class="metric-card">
+      <div class="title">Obstacle Distance</div>
+      <div class="value" id="obstacleVal">Clear</div>
+    </div>
+    <div class="metric-card">
+      <div class="title">Last Sync</div>
+      <div class="value" id="syncTime">--:--:--</div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet & Firebase SDKs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <script>
+    // 1. Firebase Configuration (Paste your project details here)
+    const firebaseConfig = {
+      databaseURL: "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com"
+    };
+
+    let db = null;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+    } catch (e) {
+      console.warn("Firebase not configured yet; running in demo simulation mode.");
+    }
+
+    // 2. Leaflet Map Setup
+    let currentLat = 28.6139;
+    let currentLng = 77.2090;
+
+    const map = L.map('map').setView([currentLat, currentLng], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    const stickMarker = L.marker([currentLat, currentLng]).addTo(map)
+      .bindPopup("<b>Smart Cane</b><br>Initial Positioning")
+      .openPopup();
+
+    let activeTrackingRef = null;
+
+    // 3. Telemetry Update Engine
+    function startTracking() {
+      const stickId = document.getElementById('stickIdInput').value.trim().toUpperCase();
+      if (!stickId) return;
+
+      if (activeTrackingRef && db) {
+        activeTrackingRef.off(); // Detach previous listener
+      }
+
+      if (db && !firebaseConfig.databaseURL.includes("YOUR-PROJECT-ID")) {
+        // Connect to live Firebase Realtime DB
+        activeTrackingRef = db.ref('sticks/' + stickId);
+        activeTrackingRef.on('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            updateDashboard(data);
+          }
+        });
+      } else {
+        // Simulation Fallback: updates randomly so you can test the UI immediately
+        runDemoSimulation();
+      }
+    }
+
+    function updateDashboard(data) {
+      // Coordinates & Marker Update
+      if (data.lat && data.lng) {
+        currentLat = data.lat;
+        currentLng = data.lng;
+        stickMarker.setLatLng([currentLat, currentLng]);
+        map.panTo([currentLat, currentLng]);
+      }
+
+      // Metric Elements
+      document.getElementById('batteryVal').textContent = data.battery ? `${data.battery}%` : '--';
+      document.getElementById('surfaceVal').textContent = data.puddle ? 'WET / PUDDLE' : 'Dry';
+      document.getElementById('surfaceVal').style.color = data.puddle ? '#38bdf8' : '#f8fafc';
+      document.getElementById('obstacleVal').textContent = data.obstacle ? `${data.obstacle} cm` : 'Clear';
+      document.getElementById('syncTime').textContent = new Date().toLocaleTimeString();
+
+      // Emergency State Handling
+      const alertBanner = document.getElementById('emergencyBanner');
+      const statusElement = document.getElementById('statusVal');
+      const pulseDot = document.getElementById('pulseDot');
+
+      if (data.emergency === true) {
+        alertBanner.style.display = 'block';
+        statusElement.textContent = 'ALERT TRIGGERED';
+        statusElement.style.color = '#ef4444';
+        pulseDot.style.background = '#ef4444';
+        pulseDot.style.boxShadow = '0 0 10px #ef4444';
+        stickMarker.setPopupContent(`<b>EMERGENCY!</b><br>${data.reason || 'Assistance requested'}`).openPopup();
+      } else {
+        alertBanner.style.display = 'none';
+        statusElement.textContent = 'Normal';
+        statusElement.style.color = '#10b981';
+        pulseDot.style.background = '#10b981';
+        pulseDot.style.boxShadow = '0 0 8px #10b981';
+        stickMarker.setPopupContent(`<b>Smart Cane (${document.getElementById('stickIdInput').value})</b><br>Operating safely.`);
+      }
+    }
+
+    // Demo Routine (Runs when Firebase credentials are not yet set)
+    function runDemoSimulation() {
+      const demoData = {
+        lat: currentLat + (Math.random() - 0.5) * 0.0005,
+        lng: currentLng + (Math.random() - 0.5) * 0.0005,
+        battery: 88,
+        puddle: false,
+        obstacle: 120,
+        emergency: false
+      };
+      updateDashboard(demoData);
+    }
+
+    // Initialize with default view
+    startTracking();
+  </script>
+</body>
+</html>
